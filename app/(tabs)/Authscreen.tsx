@@ -8,11 +8,18 @@ import {
     View,
 } from "react-native";
 
-export default function AuthScreen() {
+import {
+    fetchAuthSession,
+    signIn,
+    signUp,
+} from "aws-amplify/auth";
+
+export default function AuthScreen(): JSX.Element {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
     if (!email || !password || (!isLogin && !name)) {
@@ -20,38 +27,43 @@ export default function AuthScreen() {
       return;
     }
 
-    // 🔗 Backend endpoint
-    const url = isLogin
-      ? "https://your-api.com/auth/login"
-      : "https://your-api.com/auth/register";
+    setLoading(true);
 
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          isLogin
-            ? { email, password }
-            : { name, email, password }
-        ),
-      });
+      if (isLogin) {
+        // 🔐 LOGIN
+        await signIn({
+          username: email,
+          password,
+        });
 
-      const data = await res.json();
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
 
-      if (!res.ok) {
-        Alert.alert("Error", data.message || "Something went wrong");
-        return;
+        Alert.alert("Success", "Logged in successfully");
+        console.log("ID TOKEN:", token);
+      } else {
+        // 🔐 SIGN UP
+        await signUp({
+          username: email,
+          password,
+          options: {
+            userAttributes: {
+              email,
+              name,
+            },
+          },
+        });
+
+        Alert.alert(
+          "Verify Email",
+          "Check your email for the verification code"
+        );
       }
-
-      Alert.alert(
-        "Success",
-        isLogin ? "Logged in successfully" : "Account created"
-      );
-
-      // 👉 Save token / navigate here
-      console.log("TOKEN:", data.accessToken);
-    } catch (err) {
-      Alert.alert("Error", "Network error");
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Authentication failed");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -86,9 +98,17 @@ export default function AuthScreen() {
         onChangeText={setPassword}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
+      <TouchableOpacity
+        style={[styles.button, loading && { opacity: 0.6 }]}
+        onPress={handleSubmit}
+        disabled={loading}
+      >
         <Text style={styles.buttonText}>
-          {isLogin ? "Login" : "Create Account"}
+          {loading
+            ? "Please wait..."
+            : isLogin
+            ? "Login"
+            : "Create Account"}
         </Text>
       </TouchableOpacity>
 
@@ -103,6 +123,7 @@ export default function AuthScreen() {
   );
 }
 
+// ✅ Add this StyleSheet at the bottom
 const styles = StyleSheet.create({
   container: {
     flex: 1,
